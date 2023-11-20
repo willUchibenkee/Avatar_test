@@ -1,7 +1,25 @@
 # setup.py
 import hashlib
+import random
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.backends import default_backend
+from sympy import randprime
+from Crypto.Util.number import getPrime
+
+def mod_exp(base, exponent, modulus):
+    result = 1
+    base = base % modulus
+
+    while exponent > 0:
+        # exponent の最下位ビットが 1 のとき、result を更新
+        if exponent % 2 == 1:
+            result = (result * base) % modulus
+
+        # base を二乗し、exponent を右に1ビットシフト
+        base = (base * base) % modulus
+        exponent = exponent // 2
+
+    return result
 
 def setup_security_parameters(𝜆):
     # セキュリティパラメータ 𝜆 を受け取ります
@@ -15,8 +33,8 @@ def setup_security_parameters(𝜆):
     # G の乗法的循環群を生成
     G = generate_cyclic_group(q)
 
-    # 生成元 𝑔 を選択
-    𝑔 = select_generator(G, q)
+    # # 生成元 𝑔 を選択
+    # 𝑔 = select_generator(G, q)
 
     # 双線形写像 𝑒ˆ を定義
     G𝑇 = define_bilinear_map(G)
@@ -28,15 +46,13 @@ def setup_security_parameters(𝜆):
     system_params = {
         'G': G,
         'G𝑇': G𝑇,
-        '𝑔': 𝑔,
+        # '𝑔': 𝑔,
         '𝑞': q,
         '𝐻G': 𝐻G,
         'M' : M
     }
 
     return system_params
-
-from Crypto.Util.number import getPrime
 
 def calculate_prime_order(bit_length, num_parts=64):
     # 各部分のビット数を計算
@@ -48,9 +64,23 @@ def calculate_prime_order(bit_length, num_parts=64):
         part_prime = getPrime(part_bit_length * 2)
         q *= part_prime
 
-    q = int(q.bit_length())  # 素数 q のビット数を確認
-    print("q:", q)
+    q_bit = int(q.bit_length())  # 素数 q のビット数を確認
+    print("素数 q のビット数:", q_bit)
+    print("生成された素数q:", q)
+
     return q
+
+# def select_generator(G, q):
+#     # 生成元を選択するロジック
+#     group = set()
+#     current = G % q
+#     group.add(1)  # 単位元 (identity element)
+
+#     for i in range(1, q):
+#         group.add(current)
+#         current = (current * G) % q
+
+#     return group
 
 def prime_factors(n):
     factors = []
@@ -65,23 +95,11 @@ def prime_factors(n):
         factors.append(n)
     return factors
 
-def select_generator(G, q):
-    # 生成元を選択するロジック
-    group = set()
-    current = G % q
-    group.add(1)  # 単位元 (identity element)
-
-    for i in range(1, q):
-        group.add(current)
-        current = (current * G) % q
-
-    return group
-
 def generate_cyclic_group(q):
-    # 乗法的循環群を生成するロジック
     for candidate_g in range(2, q):
-        if all(pow(candidate_g, (q - 1) // p, q) != 1 for p in prime_factors(q - 1)):
-            return candidate_g
+        if mod_exp(candidate_g, q - 1, q) == 1:
+            if mod_exp(candidate_g, (q - 1) // 2, q) != 1:  # q - 1の素因数が2のときには生成元
+                return candidate_g
     return None
 
 def define_bilinear_map(G):
